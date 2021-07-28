@@ -1,4 +1,5 @@
 from openpyxl import load_workbook
+from openpyxl import Workbook
 
 # Using an excel sheet with special exporting - see Ryder.
 # Not all devices of the given model may be found in Asset Tiger
