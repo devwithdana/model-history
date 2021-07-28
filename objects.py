@@ -5,31 +5,21 @@ class Device:
     self.service_tag = service_tag
     self.model = model
     self.purchase_date = purchase_date
-    parsing_warranty = warranty_expiration.split('/')
-    month = int(parsing_warranty[0])
-    day = int(parsing_warranty[1])
-    year = int(parsing_warranty[2])
-    warranty_date = datetime.datetime(year, month, day)
-    self.warranty_expiration = warranty_date
+    self.warranty_expiration = warranty_expiration
+    self.tickets = []
 
   def hasExpired(self):
     current_date = datetime.datetime.today()
-    return current_date > warranty_date
+    return current_date > self.warranty_expiration
 
 class Ticket:
-  def __init__(self, work_order, status, problem, date_created):
+  def __init__(self, work_order, device_tag, status, problem, date_created):
+    self.device_tag = device_tag
     self.work_order = work_order
     self.status = status
     self.problem = problem
-    self.date_created = convertDate(date_created)
-    self.category = determineCategory()
-
-  def convertDate(self, date_created):
-    parsing_date = date_created.split()[0].split('/')
-    month = int(parsing_date[0])
-    day = int(parsing_date[1])
-    year = int(parsing_date[2])
-    ticket_date = datetime.datetime(year, month, day)
+    self.date_created = date_created
+    self.category = self.determineCategory()
 
   def determineCategory(self):
     problem_categories = {
@@ -49,14 +39,14 @@ class Ticket:
         if word.lower() in self.problem.lower():
           if ticket_problem == "":
             ticket_problem = category
-          else:
+          elif ticket_problem != category:
             multi_category = ticket_problem + ", " + category
             ticket_problem = "OTHER"
 
     if ticket_problem == "OTHER":
       print("Warning: This device might fall into multiple categories.")
-      print("Device may fall into any of these categories: " + multi_category)
-      
+      print("Device may fall into any of these categories: " + multi_category + "\n")
+
     if ticket_problem == "":
       ticket_problem = "OTHER"
 

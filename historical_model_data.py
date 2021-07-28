@@ -1,6 +1,9 @@
 from openpyxl import load_workbook
 from openpyxl import Workbook
 
+from objects import Device
+from objects import Ticket
+
 # Using an excel sheet with special exporting - see Ryder.
 # Not all devices of the given model may be found in Asset Tiger
 
@@ -13,94 +16,68 @@ dell_tickets_sheet = dell_tickets_workbook["Sheet1"]
 asset_tiger_workbook = load_workbook(asset_tiger_file)
 asset_tiger_sheet = asset_tiger_workbook["Export"]
 
-searched_model = "OPTIPLEX 7460 AIO"
-problem_categories = {
-  "MOBO": ["motherboard"], 
-  "HDD": ["hard drive", "hdd", "solid state drive", "ssd"], 
-  "LCD": ["lcd", "display", "screen"], 
-  "PSU": ["power"], 
-  "RAM": ["memory"],
-  "OTHER": []}
-tickets_by_category = {
-  "MOBO": [], 
-  "HDD": [], 
-  "LCD": [], 
-  "PSU": [], 
-  "RAM": [], 
-  "OTHER": []
-}
+search_tag = ""
+search_model = "OPTIPLEX 7460 AIO"
+search_purchase_date = ""
+search_warranty = ""
+
 
 # Read in Asset Tiger
-at_devices = dict()
-in_warranty_count = 0
+devices_dict = dict()
 for idx, cell in enumerate(asset_tiger_sheet['A']):
-  device_st = cell.value
-  device_model = asset_tiger_sheet['D' + str(idx + 1)].value
-  device_warranty = asset_tiger_sheet['C' + str(idx + 1)].value
-  device_in_warranty = asset_tiger_sheet['E' + str(idx + 1)].value
-  if device_model in searched_model:
-    at_devices[device_st] = device_warranty
-    if device_in_warranty == "Yes":
-      in_warranty_count = in_warranty_count + 1
+  if idx != 0:
+    st = cell.value
+    model = asset_tiger_sheet['D' + str(idx + 1)].value
+    warranty = asset_tiger_sheet['C' + str(idx + 1)].value
+    devices_dict[st] = Device(st, model, None, warranty)
+
 
 # Read in Dell Tickets
-dt_devices = dict()
-ticket_count = 0
-for idx, cell, in enumerate(dell_tickets_sheet['C']):
+for idx, cell in enumerate(dell_tickets_sheet['A']):
   if idx != 0:
-    device_st = cell.value
-    if device_st in list(at_devices):
-      ticket_count = ticket_count + 1
-      if device_st in list(dt_devices):
-        ticket_list = dt_devices[device_st]
-        ticket_list.append(idx + 1)
-        dt_devices[device_st] = ticket_list
-      else:
-        dt_devices[device_st] = [idx + 1]
+    work_order = cell.value
+    device_tag = dell_tickets_sheet['C' + str(idx)].value
+    status = dell_tickets_sheet['B' + str(idx)].value
+    problem = dell_tickets_sheet['E' + str(idx)].value
+    date_created = dell_tickets_sheet['F' + str(idx)].value
+    ticket = Ticket(work_order, device_tag, status, problem, date_created)
 
-# Review tickets
-for device in dt_devices:
-  row = dt_devices[device]
-  for ticket in row:
-    ticket_description = dell_tickets_sheet['E' + str(ticket)].value
-    ticket_problem = ""
-    for category in problem_categories:
-      key_words = problem_categories[category]
-      for word in key_words:
-        if word.lower() in ticket_description.lower():
-          if ticket_problem == "":
-            ticket_problem = category
-          else:
-            print("WARNING: " + device + " has triggered multiple description categories.")
-            print(ticket_problem + " and " + category)
-            print(ticket_description)
-            ticket_problem = "OTHER"
-    if ticket_problem == "":
-      ticket_problem = "OTHER"
-    tickets_by_category[ticket_problem].append(device)
+    device = devices_dict.get(device_tag)
+    if device != None: 
+      device.tickets.append(ticket)
+
+filtered_devices = devices_dict
+filtered_devices = {k:v for (k, v) in filtered_devices.items() if search_tag in v.model}
+filtered_devices = {k:v for (k, v) in filtered_devices.items() if search_model in v.model}
+filtered_devices = {k:v for (k, v) in filtered_devices.items() if search_purchase_date in v.model}
+filtered_devices = {k:v for (k, v) in filtered_devices.items() if search_warranty in v.model}
 
 # What we wanted to know
+print("Model: " + search_model)
+print("Device count: " + str(len(filtered_devices)))
 
-print("\n")
+in_warranty = {k:v for (k, v) in filtered_devices.items() if v.hasExpired()}
+print("Devices out of warranty: " + str(len(in_warranty)))
 
-print("Model: " + searched_model)
-print("Device count: " + str(len(at_devices)))
-print("Devices in warranty: " + str(in_warranty_count))
-print("Devices that have had Dell tickets: " + str(len(dt_devices)))
-print("Devices that have multiple tickets: " + str(ticket_count -len(dt_devices)))
+has_tickets = {k:v for (k, v) in filtered_devices.items() if len(v.tickets) > 0}
+print("Devices that have had Dell tickets: " + str(len(has_tickets)))
 
-print("\n")
+have_multiple_tickets = {k:v for (k, v) in has_tickets.items() if len(v.tickets) > 1}
+print("Devices that have multiple tickets: " + str(len(have_multiple_tickets)))
 
-print("Devices that had motherboard issues: " + str(len(tickets_by_category["MOBO"])))
-print("Devices that had hard drive issues: " + str(len(tickets_by_category["HDD"])))
-print("Devices that had LCD issues: " + str(len(tickets_by_category["LCD"])))
-print("Devices that had power supply issues: " + str(len(tickets_by_category["PSU"])))
-print("Devices that had RAM issues: " + str(len(tickets_by_category["RAM"])))
-
-print("\n")
-
-
-print("Devices that had other issues: " + str(len(tickets_by_category["OTHER"])))
-for device in tickets_by_category["OTHER"]:
-  ticket_rows = dt_devices[device]
-  print(dell_tickets_sheet['E' + str(ticket_rows[0])].value)
+mobo_issues = {k:v for (k, v) in has_tickets.items() if v.tickets[0].category == "MOBO"}
+print("Devices that had motherboard issues: " + str(len(mobo_issues)))
+hdd_issues = {k:v for (k, v) in has_tickets.items() if v.tickets[0].category == "HDD"}
+print("Devices that had hard drive issues: " + str(len(hdd_issues)))
+lcd_issues = {k:v for (k, v) in has_tickets.items() if v.tickets[0].category == "LCD"}
+print("Devices that had LCD issues: " + str(len(lcd_issues)))
+psu_issues = {k:v for (k, v) in has_tickets.items() if v.tickets[0].category == "PSU"}
+print("Devices that had power supply issues: " + str(len(psu_issues)))
+ram_issues = {k:v for (k, v) in has_tickets.items() if v.tickets[0].category == "RAM"}
+print("Devices that had RAM issues: " + str(len(ram_issues)))
+other_issues = {k:v for (k, v) in has_tickets.items() if v.tickets[0].category == "OTHER"}
+print("Devices that had other issues: " + str(len(other_issues)))
+for device in other_issues:
+  tickets = other_issues[device].tickets
+  for ticket in tickets:
+    print(ticket.problem)
