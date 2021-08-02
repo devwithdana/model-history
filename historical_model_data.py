@@ -1,6 +1,7 @@
 from openpyxl import load_workbook
 from openpyxl import Workbook
 from openpyxl.styles import Font
+from openpyxl.utils import get_column_letter
 
 from objects import Device
 from objects import Ticket
@@ -21,37 +22,41 @@ search_tag = ""
 search_model = "OPTIPLEX 7460 AIO"
 search_purchase_date = ""
 search_warranty = ""
+bold_font = Font(bold=True)
+
+def read_data():
+  # Read in Asset Tiger
+  devices_dict = dict()
+  for idx, cell in enumerate(asset_tiger_sheet['A']):
+    if idx != 0:
+      st = cell.value
+      model = asset_tiger_sheet['D' + str(idx + 1)].value
+      warranty = asset_tiger_sheet['C' + str(idx + 1)].value
+      devices_dict[st] = Device(st, model, None, warranty)
 
 
-# Read in Asset Tiger
-devices_dict = dict()
-for idx, cell in enumerate(asset_tiger_sheet['A']):
-  if idx != 0:
-    st = cell.value
-    model = asset_tiger_sheet['D' + str(idx + 1)].value
-    warranty = asset_tiger_sheet['C' + str(idx + 1)].value
-    devices_dict[st] = Device(st, model, None, warranty)
+  # Read in Dell Tickets
+  for idx, cell in enumerate(dell_tickets_sheet['A']):
+    if idx != 0:
+      work_order = cell.value
+      device_tag = dell_tickets_sheet['C' + str(idx)].value
+      status = dell_tickets_sheet['B' + str(idx)].value
+      problem = dell_tickets_sheet['E' + str(idx)].value
+      date_created = dell_tickets_sheet['F' + str(idx)].value
+      ticket = Ticket(work_order, device_tag, status, problem, date_created)
 
+      device = devices_dict.get(device_tag)
+      if device != None: 
+        device.tickets.append(ticket)
+  return devices_dict
 
-# Read in Dell Tickets
-for idx, cell in enumerate(dell_tickets_sheet['A']):
-  if idx != 0:
-    work_order = cell.value
-    device_tag = dell_tickets_sheet['C' + str(idx)].value
-    status = dell_tickets_sheet['B' + str(idx)].value
-    problem = dell_tickets_sheet['E' + str(idx)].value
-    date_created = dell_tickets_sheet['F' + str(idx)].value
-    ticket = Ticket(work_order, device_tag, status, problem, date_created)
-
-    device = devices_dict.get(device_tag)
-    if device != None: 
-      device.tickets.append(ticket)
-
-filtered_devices = devices_dict
-filtered_devices = {k:v for (k, v) in filtered_devices.items() if search_tag in v.model}
-filtered_devices = {k:v for (k, v) in filtered_devices.items() if search_model in v.model}
-filtered_devices = {k:v for (k, v) in filtered_devices.items() if search_purchase_date in v.model}
-filtered_devices = {k:v for (k, v) in filtered_devices.items() if search_warranty in v.model}
+def filter_data(devices_dict):
+  filtered_devices = devices_dict
+  filtered_devices = {k:v for (k, v) in filtered_devices.items() if search_tag in v.model}
+  filtered_devices = {k:v for (k, v) in filtered_devices.items() if search_model in v.model}
+  filtered_devices = {k:v for (k, v) in filtered_devices.items() if search_purchase_date in v.model}
+  filtered_devices = {k:v for (k, v) in filtered_devices.items() if search_warranty in v.model}
+  return filtered_devices
 
 def format_date(raw_date):
   if raw_date is None:
@@ -67,12 +72,33 @@ def format_date_yrmo(raw_date):
   proper_date = proper_date[0] + "-" + proper_date[1]
   return proper_date
 
+devices_dict = read_data()
+filtered_devices = filter_data(devices_dict) 
+
 wb = Workbook()
 dest_filename = 'asset_list.xlsx'
 
 def create_overview_assessment():
   ws0 = wb.active
   ws0.title = "Overview"
+
+  ws0['A1'].font = bold_font
+  ws0['A2'].font = bold_font
+  ws0['A3'].font = bold_font
+  ws0['A4'].font = bold_font
+  ws0['A5'].font = bold_font
+  ws0['A7'].font = bold_font
+  ws0['A8'].font = bold_font
+  ws0['A9'].font = bold_font
+  ws0['A10'].font = bold_font
+  ws0['A12'].font = bold_font
+  ws0['A13'].font = bold_font
+  ws0['A14'].font = bold_font
+  ws0['A15'].font = bold_font
+  ws0['A16'].font = bold_font
+  ws0['A17'].font = bold_font
+  ws0['A18'].font = bold_font
+  ws0['A19'].font = bold_font
 
   # ======= Search Criteria
   ws0['A1'] = "Search Criteria"
@@ -152,6 +178,8 @@ def create_overview_assessment():
         ws0['B' + str(idx)] = ticket.problem
         idx = idx + 1
 
+  set_col_width(ws0)
+
 def create_gen_asset_info_ws():
   ws1 = wb.create_sheet()
   ws1.title = "General Asset Info"
@@ -163,6 +191,9 @@ def create_gen_asset_info_ws():
   ws1['D1'] = "Warranty Expiration"
   ws1['E1'] = "Tickets"
   ws1['F1'] = "Ticket Categories"
+
+  for cell in ws1[1]:
+    cell.font = bold_font
 
   idx = 2
   for asset in filtered_devices:
@@ -183,6 +214,8 @@ def create_gen_asset_info_ws():
     ws1['F' + str(idx)] = problem_types
     idx = idx + 1
 
+  set_col_width(ws1)
+
 def create_ticket_view_ws():
   ws2 = wb.create_sheet()
   ws2.title = "Ticket Statistics"
@@ -196,6 +229,9 @@ def create_ticket_view_ws():
   ws2['E1'] = "Problem"
   ws2['F1'] = "Status"
 
+  for cell in ws2[1]:
+    cell.font = bold_font
+
   idx = 2
   for asset in has_tickets:
     device = has_tickets[asset]
@@ -208,6 +244,7 @@ def create_ticket_view_ws():
       ws2['E' + str(idx)] = ticket.problem
       ws2['F' + str(idx)] = ticket.status
       idx = idx + 1
+  set_col_width(ws2)
 
 def create_warranty_ticket_ratios():
   ws3 = wb.create_sheet()
@@ -216,6 +253,9 @@ def create_warranty_ticket_ratios():
   # Key = Month-Year, Value = [Expiring, Tickets]
   ws3['B1'] = "Devices Expiring"
   ws3['C1'] = "Tickets Created"
+
+  for cell in ws3[1]:
+    cell.font = bold_font
 
   ratio = dict()
   for asset in filtered_devices:
@@ -248,6 +288,24 @@ def create_warranty_ticket_ratios():
     ws3['B' + str(idx)] = date[0]
     ws3['C' + str(idx)] = date[1]
     idx = idx + 1
+  set_col_width(ws3)
+
+def set_col_width(ws):
+  col_widths = []
+  for row in ws:
+    for i, cell in enumerate(row):
+      cell_val = str(cell.value)
+      if cell_val != None:
+        if len(col_widths) > i:
+          if len(cell_val) > col_widths[i]:
+            col_widths[i] = len(cell_val)
+        else:
+          col_widths += [len(cell_val)]
+
+  for i, col_width in enumerate(col_widths):
+    # +1 for wiggle room
+    ws.column_dimensions[get_column_letter(i + 1)].width = col_width + 1
+
 
 create_overview_assessment()
 create_gen_asset_info_ws()
